@@ -1,22 +1,83 @@
 (function () {
   "use strict";
 
-  if (window.__cinebyTV) return;
-  window.__cinebyTV = true;
+  if (window.__CINEBY_TV_120__) return;
+  window.__CINEBY_TV_120__ = true;
 
-  var current = null;
-  var lastURL = location.href;
+  const HOME = "https://cineby.ws/";
+  const VERSION = "1.2.0";
 
-  // Bloquear aperturas de ventanas publicitarias.
+  let current = null;
+
+  // ==========================================
+  // 1. PROTECCIÓN CONTRA VENTANAS EMERGENTES
+  // ==========================================
+
   try {
     window.open = function () {
-      console.log("Cineby TV: ventana emergente bloqueada");
+      console.log("[Cineby TV] Popup bloqueado");
       return null;
     };
   } catch (e) {}
 
-  // Elementos interactivos de la página.
-  var selector = [
+  // Evitar que enlaces abran otras ventanas.
+  function cleanLinks() {
+    document.querySelectorAll("a[target]").forEach(a => {
+      a.removeAttribute("target");
+    });
+  }
+
+  // ==========================================
+  // 2. PROTECCIÓN CONTRA ENLACES EXTERNOS
+  // ==========================================
+
+  function isAllowedURL(url) {
+    try {
+      const target = new URL(url, location.href);
+
+      // Permitir navegación interna.
+      if (target.origin === location.origin) {
+        return true;
+      }
+
+      // Permitir enlaces internos especiales.
+      if (
+        target.protocol === "about:" ||
+        target.protocol === "blob:"
+      ) {
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  document.addEventListener(
+    "click",
+    function (event) {
+      const link = event.target.closest("a[href]");
+
+      if (!link) return;
+
+      const url = link.href;
+
+      if (!isAllowedURL(url)) {
+        console.log("[Cineby TV] Enlace externo bloqueado:", url);
+
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    },
+    true
+  );
+
+  // ==========================================
+  // 3. NAVEGACIÓN CON CONTROL SAMSUNG
+  // ==========================================
+
+  const selector = [
     "a[href]",
     "button",
     '[role="button"]',
@@ -28,45 +89,49 @@
   function visible(el) {
     if (!el || !el.isConnected) return false;
 
-    var r = el.getBoundingClientRect();
-    var s = getComputedStyle(el);
+    const r = el.getBoundingClientRect();
+    const s = getComputedStyle(el);
 
     return (
       r.width > 8 &&
       r.height > 8 &&
-      s.visibility !== "hidden" &&
-      s.display !== "none"
+      s.display !== "none" &&
+      s.visibility !== "hidden"
     );
   }
 
   function elements() {
-    return Array.prototype.slice
-      .call(document.querySelectorAll(selector))
-      .filter(visible);
+    return Array.from(
+      document.querySelectorAll(selector)
+    ).filter(visible);
   }
 
-  // Borde azul para saber qué está seleccionado.
-  var style = document.createElement("style");
+  // ==========================================
+  // 4. BORDE AZUL DE SELECCIÓN
+  // ==========================================
+
+  const style = document.createElement("style");
 
   style.textContent = `
-    .cineby-focus {
+    .cineby-tv-focus {
       outline: 4px solid #00d4ff !important;
       outline-offset: 3px !important;
-      box-shadow: 0 0 15px #00d4ff !important;
+      box-shadow: 0 0 14px rgba(0,212,255,.7) !important;
     }
   `;
 
-  (document.head || document.documentElement).appendChild(style);
+  (document.head || document.documentElement)
+    .appendChild(style);
 
   function highlight(el) {
     if (!el) return;
 
     if (current) {
-      current.classList.remove("cineby-focus");
+      current.classList.remove("cineby-tv-focus");
     }
 
     current = el;
-    current.classList.add("cineby-focus");
+    current.classList.add("cineby-tv-focus");
 
     current.scrollIntoView({
       block: "nearest",
@@ -80,10 +145,12 @@
     }
   }
 
-  // Navegación espacial: busca el elemento más cercano
-  // en la dirección de la flecha presionada.
-  function move(key) {
-    var items = elements();
+  // ==========================================
+  // 5. SELECCIÓN ESPACIAL
+  // ==========================================
+
+  function move(direction) {
+    const items = elements();
 
     if (!items.length) return;
 
@@ -92,35 +159,41 @@
       return;
     }
 
-    var origin = current.getBoundingClientRect();
+    const origin = current.getBoundingClientRect();
 
-    var ox = origin.left + origin.width / 2;
-    var oy = origin.top + origin.height / 2;
+    const ox = origin.left + origin.width / 2;
+    const oy = origin.top + origin.height / 2;
 
-    var best = null;
-    var bestScore = Infinity;
+    let best = null;
+    let bestScore = Infinity;
 
-    items.forEach(function (el) {
+    items.forEach(el => {
       if (el === current) return;
 
-      var r = el.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
 
-      var dx = r.left + r.width / 2 - ox;
-      var dy = r.top + r.height / 2 - oy;
+      const dx = r.left + r.width / 2 - ox;
+      const dy = r.top + r.height / 2 - oy;
 
-      if (key === "ArrowRight" && dx <= 0) return;
-      if (key === "ArrowLeft" && dx >= 0) return;
-      if (key === "ArrowDown" && dy <= 0) return;
-      if (key === "ArrowUp" && dy >= 0) return;
+      if (direction === "ArrowRight" && dx <= 0) return;
+      if (direction === "ArrowLeft" && dx >= 0) return;
+      if (direction === "ArrowDown" && dy <= 0) return;
+      if (direction === "ArrowUp" && dy >= 0) return;
 
-      var horizontal =
-        key === "ArrowRight" || key === "ArrowLeft";
+      const horizontal =
+        direction === "ArrowRight" ||
+        direction === "ArrowLeft";
 
-      var primary = horizontal ? Math.abs(dx) : Math.abs(dy);
-      var secondary = horizontal ? Math.abs(dy) : Math.abs(dx);
+      const primary = horizontal
+        ? Math.abs(dx)
+        : Math.abs(dy);
 
-      // Penaliza los elementos muy alejados del eje.
-      var score = primary + secondary * 3;
+      const secondary = horizontal
+        ? Math.abs(dy)
+        : Math.abs(dx);
+
+      // Favorecer elementos alineados.
+      const score = primary + secondary * 4;
 
       if (score < bestScore) {
         bestScore = score;
@@ -131,15 +204,20 @@
     if (best) highlight(best);
   }
 
+  // ==========================================
+  // 6. BOTÓN OK
+  // ==========================================
+
   function activate() {
     if (!current || !visible(current)) return;
 
     if (current.tagName === "VIDEO") {
       if (current.paused) {
-        current.play().catch(function () {});
+        current.play().catch(() => {});
       } else {
         current.pause();
       }
+
       return;
     }
 
@@ -148,69 +226,94 @@
       return;
     }
 
+    // Evitar abrir enlaces externos.
+    if (
+      current.tagName === "A" &&
+      !isAllowedURL(current.href)
+    ) {
+      console.log("[Cineby TV] Enlace externo rechazado");
+      return;
+    }
+
     current.click();
   }
 
-  // Permitir volver a la página anterior.
+  // ==========================================
+  // 7. BOTÓN ATRÁS
+  // ==========================================
+
   function goBack() {
     if (document.fullscreenElement) {
-      document.exitFullscreen();
+      document.exitFullscreen().catch(() => {});
       return;
     }
 
     if (history.length > 1) {
       history.back();
     } else {
-      location.href = "https://cineby.ws";
+      location.href = HOME;
     }
   }
+
+  // ==========================================
+  // 8. CONTROL REMOTO
+  // ==========================================
 
   document.addEventListener(
     "keydown",
     function (event) {
-      var key = event.key;
+      const key = event.key;
+      const code = event.keyCode;
 
-      // No interferir mientras se escribe en el buscador.
-      var active = document.activeElement;
-      var typing =
+      const active = document.activeElement;
+
+      const typing =
         active &&
-        (active.tagName === "INPUT" ||
-          active.tagName === "TEXTAREA");
+        (
+          active.tagName === "INPUT" ||
+          active.tagName === "TEXTAREA" ||
+          active.isContentEditable
+        );
 
-      if (
-        key === "ArrowUp" ||
-        key === "ArrowDown" ||
-        key === "ArrowLeft" ||
-        key === "ArrowRight"
-      ) {
+      const arrows = [
+        "ArrowUp",
+        "ArrowDown",
+        "ArrowLeft",
+        "ArrowRight"
+      ];
+
+      if (arrows.includes(key)) {
         if (typing) return;
 
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation();
 
         move(key);
         return;
       }
 
-      if (key === "Enter") {
+      if (key === "Enter" || code === 13) {
         if (typing) return;
 
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation();
 
         activate();
         return;
       }
 
       if (
-        key === "Backspace" ||
         key === "Escape" ||
-        event.keyCode === 10009
+        key === "Backspace" ||
+        code === 10009
       ) {
-        if (typing) return;
+        if (typing) {
+          active.blur();
+          return;
+        }
 
         event.preventDefault();
-        event.stopPropagation();
+        event.stopImmediatePropagation();
 
         goBack();
       }
@@ -218,17 +321,24 @@
     true
   );
 
-  // Detectar cambios de página dentro de Cineby.
-  setInterval(function () {
-    if (location.href !== lastURL) {
-      lastURL = location.href;
-      current = null;
-    }
+  // ==========================================
+  // 9. MANTENIMIENTO
+  // ==========================================
+
+  const observer = new MutationObserver(function () {
+    cleanLinks();
 
     if (current && !visible(current)) {
       current = null;
     }
-  }, 1000);
+  });
 
-  console.log("Cineby TV 1.1.0 iniciado");
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true
+  });
+
+  cleanLinks();
+
+  console.log("Cineby TV " + VERSION + " iniciado");
 })();

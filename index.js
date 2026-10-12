@@ -1,13 +1,14 @@
+
 (function () {
   "use strict";
 
-  if (window.__CINEBY_TV_130__) return;
-  window.__CINEBY_TV_130__ = true;
+  if (window.__CINEBY_TV_140__) return;
+  window.__CINEBY_TV_140__ = true;
 
   const HOME = "https://cineby.ws/";
   let current = null;
 
-  // BLOQUEO DE VENTANAS EMERGENTES
+  // Mantener bloqueo de ventanas emergentes.
   try {
     window.open = function () {
       return null;
@@ -36,21 +37,27 @@
     }
   }, true);
 
-  // ESTILOS DE SELECCIÓN
+  // Resaltado visual.
   const style = document.createElement("style");
-
   style.textContent = `
     .cineby-focus {
       outline: 4px solid #00d4ff !important;
       outline-offset: 3px !important;
       box-shadow: 0 0 18px rgba(0,212,255,.8) !important;
     }
+
+    .content-card > a.cineby-focus {
+      display: block !important;
+      border-radius: 8px !important;
+    }
+
+    #playerPlayBtn.cineby-focus {
+      outline: 5px solid #00d4ff !important;
+      box-shadow: 0 0 25px #00d4ff !important;
+    }
   `;
+  (document.head || document.documentElement).appendChild(style);
 
-  (document.head || document.documentElement)
-    .appendChild(style);
-
-  // IDENTIFICAR ELEMENTOS INTERACTIVOS
   function isVisible(el) {
     if (!el || !el.isConnected) return false;
 
@@ -62,33 +69,49 @@
       r.height > 12 &&
       s.display !== "none" &&
       s.visibility !== "hidden" &&
-      s.opacity !== "0"
+      s.opacity !== "0" &&
+      !el.closest("[hidden], [inert]")
     );
   }
 
+  // Solo elementos realmente interactivos.
   function getItems() {
     const selector = [
+      ".content-card > a[href]",
+      ".content-card > .cb-shelf-add",
+      "#play-movie-btn",
+      "#playerPlayBtn",
+      ".dp-mobile-actions .dp-play-btn",
+      ".cb-shelf-act",
+      ".server-tab",
+      ".slider-prev",
+      ".slider-next",
       "a[href]",
       "button",
-      '[role="button"]',
-      '[tabindex]:not([tabindex="-1"])',
       "input",
-      "video",
-      '[onclick]',
-      '[class*="cursor-pointer"]',
-      '[class*="movie-card"]',
-      '[class*="movieCard"]',
-      '[class*="poster"]',
-      '[class*="play"]'
+      "select",
+      "summary",
+      '[role="button"]',
+      '[tabindex]:not([tabindex="-1"])'
     ].join(",");
 
-    const candidates = Array.from(
+    const elements = Array.from(
       document.querySelectorAll(selector)
     ).filter(isVisible);
 
-    // Evitar elementos duplicados.
-    return candidates.filter((el, index) => {
-      return candidates.indexOf(el) === index;
+    return elements.filter((el, index) => {
+      if (elements.indexOf(el) !== index) return false;
+
+      // No seleccionar el contenedor de una tarjeta.
+      if (el.matches(".content-card")) return false;
+
+      // El botón de reproducción debe ser independiente.
+      if (
+        el.id === "playerPlayBtn" &&
+        !isVisible(el)
+      ) return false;
+
+      return true;
     });
   }
 
@@ -112,7 +135,7 @@
     } catch (e) {}
   }
 
-  // NAVEGACIÓN ESPACIAL
+  // Buscar el elemento más cercano en la dirección pulsada.
   function move(direction) {
     const items = getItems();
 
@@ -156,18 +179,14 @@
 
       let score = primary + secondary * 4;
 
-      // Priorizar tarjetas de películas y reproducción.
-      const cls =
-        typeof el.className === "string"
-          ? el.className.toLowerCase()
-          : "";
-
-      if (
-        cls.includes("movie") ||
-        cls.includes("poster") ||
-        cls.includes("play")
-      ) {
+      // Preferir la portada al botón pequeño de favoritos.
+      if (el.matches(".content-card > a")) {
         score *= 0.75;
+      }
+
+      // Priorizar el botón real de reproducción.
+      if (el.id === "playerPlayBtn") {
+        score *= 0.65;
       }
 
       if (score < bestScore) {
@@ -182,12 +201,27 @@
   function activate() {
     if (!current || !isVisible(current)) return;
 
-    if (current.tagName === "VIDEO") {
-      if (current.paused) {
-        current.play().catch(() => {});
-      } else {
-        current.pause();
+    // Reproducción: activar el botón real.
+    if (current.id === "playerPlayBtn") {
+      current.click();
+      return;
+    }
+
+    // Portadas: abrir el enlace de la película.
+    if (current.matches(".content-card > a[href]")) {
+      if (allowed(current.href)) {
+        location.href = current.href;
       }
+      return;
+    }
+
+    // Favoritos y servidores: ejecutar su evento.
+    if (
+      current.matches(".cb-shelf-add") ||
+      current.matches(".cb-shelf-act") ||
+      current.matches(".server-tab")
+    ) {
+      current.click();
       return;
     }
 
@@ -262,9 +296,9 @@
     }
   }, true);
 
-  // ACTUALIZAR ELEMENTOS DINÁMICOS
   const observer = new MutationObserver(function () {
     if (current && !isVisible(current)) {
+      current.classList.remove("cineby-focus");
       current = null;
     }
   });
@@ -274,5 +308,5 @@
     subtree: true
   });
 
-  console.log("Cineby TV 1.3.0 iniciado");
+  console.log("Cineby TV 1.4.0 iniciado");
 })();

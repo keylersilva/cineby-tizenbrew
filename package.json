@@ -1,0 +1,10 @@
+
+{
+  "name": "cineby-tizenbrew",
+  "version": "1.0.0",
+  "description": "Navegacion con control remoto Samsung",
+  "packageType": "mods",
+  "appName": "Cineby TV",
+  "websiteURL": "https://cineby.ws",
+  "main": "index.js"
+}

@@ -1,137 +1,106 @@
 (function () {
   "use strict";
 
-  if (window.__CINEBY_TV_120__) return;
-  window.__CINEBY_TV_120__ = true;
+  if (window.__CINEBY_TV_130__) return;
+  window.__CINEBY_TV_130__ = true;
 
   const HOME = "https://cineby.ws/";
-  const VERSION = "1.2.0";
-
   let current = null;
 
-  // ==========================================
-  // 1. PROTECCIÓN CONTRA VENTANAS EMERGENTES
-  // ==========================================
-
+  // BLOQUEO DE VENTANAS EMERGENTES
   try {
     window.open = function () {
-      console.log("[Cineby TV] Popup bloqueado");
       return null;
     };
   } catch (e) {}
 
-  // Evitar que enlaces abran otras ventanas.
-  function cleanLinks() {
-    document.querySelectorAll("a[target]").forEach(a => {
-      a.removeAttribute("target");
-    });
-  }
-
-  // ==========================================
-  // 2. PROTECCIÓN CONTRA ENLACES EXTERNOS
-  // ==========================================
-
-  function isAllowedURL(url) {
+  function allowed(url) {
     try {
-      const target = new URL(url, location.href);
-
-      // Permitir navegación interna.
-      if (target.origin === location.origin) {
-        return true;
-      }
-
-      // Permitir enlaces internos especiales.
-      if (
-        target.protocol === "about:" ||
-        target.protocol === "blob:"
-      ) {
-        return true;
-      }
-
-      return false;
+      const u = new URL(url, location.href);
+      return (
+        u.origin === location.origin ||
+        u.protocol === "blob:" ||
+        u.protocol === "about:"
+      );
     } catch (e) {
       return false;
     }
   }
 
-  document.addEventListener(
-    "click",
-    function (event) {
-      const link = event.target.closest("a[href]");
+  document.addEventListener("click", function (e) {
+    const link = e.target.closest("a[href]");
 
-      if (!link) return;
+    if (link && !allowed(link.href)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+    }
+  }, true);
 
-      const url = link.href;
-
-      if (!isAllowedURL(url)) {
-        console.log("[Cineby TV] Enlace externo bloqueado:", url);
-
-        event.preventDefault();
-        event.stopImmediatePropagation();
-      }
-    },
-    true
-  );
-
-  // ==========================================
-  // 3. NAVEGACIÓN CON CONTROL SAMSUNG
-  // ==========================================
-
-  const selector = [
-    "a[href]",
-    "button",
-    '[role="button"]',
-    '[tabindex]:not([tabindex="-1"])',
-    "input",
-    "video"
-  ].join(",");
-
-  function visible(el) {
-    if (!el || !el.isConnected) return false;
-
-    const r = el.getBoundingClientRect();
-    const s = getComputedStyle(el);
-
-    return (
-      r.width > 8 &&
-      r.height > 8 &&
-      s.display !== "none" &&
-      s.visibility !== "hidden"
-    );
-  }
-
-  function elements() {
-    return Array.from(
-      document.querySelectorAll(selector)
-    ).filter(visible);
-  }
-
-  // ==========================================
-  // 4. BORDE AZUL DE SELECCIÓN
-  // ==========================================
-
+  // ESTILOS DE SELECCIÓN
   const style = document.createElement("style");
 
   style.textContent = `
-    .cineby-tv-focus {
+    .cineby-focus {
       outline: 4px solid #00d4ff !important;
       outline-offset: 3px !important;
-      box-shadow: 0 0 14px rgba(0,212,255,.7) !important;
+      box-shadow: 0 0 18px rgba(0,212,255,.8) !important;
     }
   `;
 
   (document.head || document.documentElement)
     .appendChild(style);
 
+  // IDENTIFICAR ELEMENTOS INTERACTIVOS
+  function isVisible(el) {
+    if (!el || !el.isConnected) return false;
+
+    const r = el.getBoundingClientRect();
+    const s = getComputedStyle(el);
+
+    return (
+      r.width > 12 &&
+      r.height > 12 &&
+      s.display !== "none" &&
+      s.visibility !== "hidden" &&
+      s.opacity !== "0"
+    );
+  }
+
+  function getItems() {
+    const selector = [
+      "a[href]",
+      "button",
+      '[role="button"]',
+      '[tabindex]:not([tabindex="-1"])',
+      "input",
+      "video",
+      '[onclick]',
+      '[class*="cursor-pointer"]',
+      '[class*="movie-card"]',
+      '[class*="movieCard"]',
+      '[class*="poster"]',
+      '[class*="play"]'
+    ].join(",");
+
+    const candidates = Array.from(
+      document.querySelectorAll(selector)
+    ).filter(isVisible);
+
+    // Evitar elementos duplicados.
+    return candidates.filter((el, index) => {
+      return candidates.indexOf(el) === index;
+    });
+  }
+
   function highlight(el) {
     if (!el) return;
 
     if (current) {
-      current.classList.remove("cineby-tv-focus");
+      current.classList.remove("cineby-focus");
     }
 
     current = el;
-    current.classList.add("cineby-tv-focus");
+    current.classList.add("cineby-focus");
 
     current.scrollIntoView({
       block: "nearest",
@@ -140,27 +109,21 @@
 
     try {
       current.focus({ preventScroll: true });
-    } catch (e) {
-      current.focus();
-    }
+    } catch (e) {}
   }
 
-  // ==========================================
-  // 5. SELECCIÓN ESPACIAL
-  // ==========================================
-
+  // NAVEGACIÓN ESPACIAL
   function move(direction) {
-    const items = elements();
+    const items = getItems();
 
     if (!items.length) return;
 
-    if (!current || !visible(current)) {
+    if (!current || !isVisible(current)) {
       highlight(items[0]);
       return;
     }
 
     const origin = current.getBoundingClientRect();
-
     const ox = origin.left + origin.width / 2;
     const oy = origin.top + origin.height / 2;
 
@@ -171,7 +134,6 @@
       if (el === current) return;
 
       const r = el.getBoundingClientRect();
-
       const dx = r.left + r.width / 2 - ox;
       const dy = r.top + r.height / 2 - oy;
 
@@ -192,8 +154,21 @@
         ? Math.abs(dy)
         : Math.abs(dx);
 
-      // Favorecer elementos alineados.
-      const score = primary + secondary * 4;
+      let score = primary + secondary * 4;
+
+      // Priorizar tarjetas de películas y reproducción.
+      const cls =
+        typeof el.className === "string"
+          ? el.className.toLowerCase()
+          : "";
+
+      if (
+        cls.includes("movie") ||
+        cls.includes("poster") ||
+        cls.includes("play")
+      ) {
+        score *= 0.75;
+      }
 
       if (score < bestScore) {
         bestScore = score;
@@ -204,12 +179,8 @@
     if (best) highlight(best);
   }
 
-  // ==========================================
-  // 6. BOTÓN OK
-  // ==========================================
-
   function activate() {
-    if (!current || !visible(current)) return;
+    if (!current || !isVisible(current)) return;
 
     if (current.tagName === "VIDEO") {
       if (current.paused) {
@@ -217,30 +188,18 @@
       } else {
         current.pause();
       }
-
       return;
     }
 
-    if (current.tagName === "INPUT") {
-      current.focus();
-      return;
-    }
-
-    // Evitar abrir enlaces externos.
     if (
       current.tagName === "A" &&
-      !isAllowedURL(current.href)
+      !allowed(current.href)
     ) {
-      console.log("[Cineby TV] Enlace externo rechazado");
       return;
     }
 
     current.click();
   }
-
-  // ==========================================
-  // 7. BOTÓN ATRÁS
-  // ==========================================
 
   function goBack() {
     if (document.fullscreenElement) {
@@ -255,80 +214,57 @@
     }
   }
 
-  // ==========================================
-  // 8. CONTROL REMOTO
-  // ==========================================
+  document.addEventListener("keydown", function (e) {
+    const active = document.activeElement;
 
-  document.addEventListener(
-    "keydown",
-    function (event) {
-      const key = event.key;
-      const code = event.keyCode;
+    const typing =
+      active &&
+      (
+        active.tagName === "INPUT" ||
+        active.tagName === "TEXTAREA" ||
+        active.isContentEditable
+      );
 
-      const active = document.activeElement;
+    if (
+      ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"]
+        .includes(e.key)
+    ) {
+      if (typing) return;
 
-      const typing =
-        active &&
-        (
-          active.tagName === "INPUT" ||
-          active.tagName === "TEXTAREA" ||
-          active.isContentEditable
-        );
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      move(e.key);
+      return;
+    }
 
-      const arrows = [
-        "ArrowUp",
-        "ArrowDown",
-        "ArrowLeft",
-        "ArrowRight"
-      ];
+    if (e.key === "Enter" || e.keyCode === 13) {
+      if (typing) return;
 
-      if (arrows.includes(key)) {
-        if (typing) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      activate();
+      return;
+    }
 
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
-        move(key);
+    if (
+      e.key === "Escape" ||
+      e.key === "Backspace" ||
+      e.keyCode === 10009
+    ) {
+      if (typing) {
+        active.blur();
         return;
       }
 
-      if (key === "Enter" || code === 13) {
-        if (typing) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      goBack();
+    }
+  }, true);
 
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
-        activate();
-        return;
-      }
-
-      if (
-        key === "Escape" ||
-        key === "Backspace" ||
-        code === 10009
-      ) {
-        if (typing) {
-          active.blur();
-          return;
-        }
-
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
-        goBack();
-      }
-    },
-    true
-  );
-
-  // ==========================================
-  // 9. MANTENIMIENTO
-  // ==========================================
-
+  // ACTUALIZAR ELEMENTOS DINÁMICOS
   const observer = new MutationObserver(function () {
-    cleanLinks();
-
-    if (current && !visible(current)) {
+    if (current && !isVisible(current)) {
       current = null;
     }
   });
@@ -338,7 +274,5 @@
     subtree: true
   });
 
-  cleanLinks();
-
-  console.log("Cineby TV " + VERSION + " iniciado");
+  console.log("Cineby TV 1.3.0 iniciado");
 })();
